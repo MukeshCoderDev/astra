@@ -1,5 +1,5 @@
-import { Outlet } from 'react-router-dom';
-import { useState } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import Header from '../nav/Header';
 import SideNav from '../nav/SideNav';
 import BottomNav from '../nav/BottomNav';
@@ -10,12 +10,34 @@ import { useUIStore } from '../../store/uiStore';
 import { clsx } from 'clsx';
 
 function Layout() {
-  const { mobileMenuOpen, setMobileMenuOpen } = useUIStore();
+  const location = useLocation();
+  const { mobileMenuOpen, setMobileMenuOpen, immersive, setImmersive } = useUIStore();
   const [sidebarCollapsed] = useState(false);
 
   const handleMenuClick = () => {
     setMobileMenuOpen(!mobileMenuOpen);
   };
+
+  // Auto-immersive on watch and shorts detail
+  useEffect(() => {
+    const pathname = location.pathname || '';
+    const routeImmersive = pathname.startsWith('/watch') || /^\/shorts\//.test(pathname);
+    // Route can force immersive ON, but user can toggle it off after
+    if (routeImmersive) setImmersive(true);
+  }, [location.pathname, setImmersive]);
+
+  // Peek the sidebar when mouse hits far-left edge in immersive mode
+  useEffect(() => {
+    if (!immersive) return;
+    const aside = document.querySelector('aside') as HTMLElement | null;
+    if (!aside) return;
+    const onMove = (e: MouseEvent) => {
+      const peek = e.clientX <= 12;
+      aside.style.transform = peek ? 'translateX(0)' : 'translateX(-100%)';
+    };
+    window.addEventListener('mousemove', onMove);
+    return () => window.removeEventListener('mousemove', onMove);
+  }, [immersive]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -29,8 +51,9 @@ function Layout() {
       <div className="hidden lg:flex min-h-screen">
         {/* Sidebar */}
         <aside className={clsx(
-          "border-r bg-card transition-all duration-300",
-          sidebarCollapsed ? "w-16" : "w-64"
+          "fixed left-0 top-0 z-40 h-screen border-r bg-card transition-transform duration-200",
+          sidebarCollapsed ? "w-16" : "w-64",
+          immersive ? "-translate-x-full" : "translate-x-0"
         )}>
           <div className="sticky top-0 h-screen overflow-y-auto">
             <SideNav className="h-full" />
@@ -38,13 +61,19 @@ function Layout() {
         </aside>
         
         {/* Main Content */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className={clsx(
+          "flex-1 flex flex-col min-w-0 transition-all duration-200",
+          immersive ? "ml-0" : (sidebarCollapsed ? "ml-16" : "ml-64")
+        )}>
           <Header 
             onMenuClick={handleMenuClick}
             showMenuButton={false}
           />
           <main className="flex-1 overflow-y-auto">
-            <div className="container mx-auto px-4 py-6">
+            <div className={clsx(
+              "mx-auto px-4 py-6",
+              immersive ? "container-fluid" : "container"
+            )}>
               <Outlet />
             </div>
             <Footer />

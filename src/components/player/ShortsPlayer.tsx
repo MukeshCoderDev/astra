@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Video } from '../../types';
+import { useUIStore } from '../../store/uiStore';
 
 interface ShortsPlayerProps {
   videos: Video[];
@@ -31,11 +32,17 @@ export function ShortsPlayer({
   className 
 }: ShortsPlayerProps) {
   const navigate = useNavigate();
+  const { setImmersive } = useUIStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
   const currentVideo = videos[currentIndex];
+
+  // Set immersive mode when shorts player loads
+  useEffect(() => {
+    setImmersive(true);
+  }, [setImmersive]);
 
   // Handle keyboard navigation
   useEffect(() => {

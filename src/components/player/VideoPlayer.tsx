@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import Hls from 'hls.js';
-import { Play, Pause, Volume2, VolumeX, Maximize, Settings } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Settings, Monitor } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
 import { ScreenReaderOnly, LiveRegion } from '../ui/screen-reader';
 import { clsx } from 'clsx';
 import { formatTimeForScreenReader, generateId } from '../../lib/accessibility';
 import { useKeyboardNavigation, useScreenReader } from '../../hooks/useAccessibility';
+import { useUIStore } from '../../store/uiStore';
 
 interface VideoPlayerProps {
   src: string;
@@ -37,6 +38,7 @@ export function VideoPlayer({
   onPause,
   onEnded,
 }: VideoPlayerProps) {
+  const { toggleImmersive, setImmersive } = useUIStore();
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -44,35 +46,43 @@ export function VideoPlayer({
   const [isMuted, setIsMuted] = useState(muted);
   const [volume, setVolume] = useState(1);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [duration, setDuration] = useState<number | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
-  const [controlsVisible, setControlsVisible] = useState(true);
+  const [ready, setReady] = useState(false);
   
   const playerId = generateId('video-player');
   const { announcement, announce } = useScreenReader();
 
-  // Initialize HLS
+  // Initialize HLS and gate UI on manifest/metadata
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
+    let hls: Hls | null = null;
+
+    const onLoaded = () => {
+      const dur = Number.isFinite(video.duration) ? video.duration : NaN;
+      setDuration(Number.isFinite(dur) ? dur : null);
+      setReady(true);
+      setIsLoading(false);
+    };
+
+    const onTime = () => setCurrentTime(video.currentTime);
+
     if (Hls.isSupported()) {
-      const hls = new Hls({
-        enableWorker: true,
+      hls = new Hls({ 
+        enableWorker: true, 
         lowLatencyMode: true,
         backBufferLength: 90,
       });
-
       hls.loadSource(src);
       hls.attachMedia(video);
-
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        setIsLoading(false);
-        if (autoPlay) {
-          video.play().catch(console.error);
-        }
+      hls.on(Hls.Events.MANIFEST_PARSED, onLoaded);
+      hls.on(Hls.Events.LEVEL_LOADED, () => {
+        // some streams give duration here
+        if (!duration) onLoaded();
       });
 
       hls.on(Hls.Events.ERROR, (_, data) => {
@@ -94,17 +104,26 @@ export function VideoPlayer({
 
       hlsRef.current = hls;
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native HLS support (Safari)
+      // Safari native HLS
       video.src = src;
-      setIsLoading(false);
+      video.addEventListener('loadedmetadata', onLoaded);
+    }
+
+    video.addEventListener('timeupdate', onTime);
+    video.addEventListener('play', () => setImmersive(true));
+
+    if (autoPlay && ready) {
+      video.play().catch(console.error);
     }
 
     return () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
+      video.removeEventListener('timeupdate', onTime);
+      video.removeEventListener('loadedmetadata', onLoaded);
+      if (hls) {
+        hls.destroy();
       }
     };
-  }, [src, autoPlay]);
+  }, [src, autoPlay, setImmersive, duration, ready]);
 
   // Video event handlers
   useEffect(() => {
@@ -135,7 +154,9 @@ export function VideoPlayer({
     };
 
     const handleLoadedMetadata = () => {
-      setDuration(video.duration);
+      const dur = Number.isFinite(video.duration) ? video.duration : null;
+      setDuration(dur);
+      setReady(true);
     };
 
     const handleFullscreenChange = () => {
@@ -159,14 +180,57 @@ export function VideoPlayer({
     };
   }, [onTimeUpdate, onPlay, onPause, onEnded]);
 
-  // Keyboard navigation
-  useKeyboardNavigation(
-    () => togglePlay(), // Enter
-    undefined, // Escape
-    () => handleVolumeChange(Math.min(1, volume + 0.1)), // Arrow Up
-    () => handleVolumeChange(Math.max(0, volume - 0.1)), // Arrow Down
-    () => handleSeek(Math.max(0, (currentTime - 10) / duration * 100)), // Arrow Left
-    () => handleSeek(Math.min(100, (currentTime + 10) / duration * 100)) // Arrow Right
+  // Hotkeys
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      switch (e.key.toLowerCase()) {
+        case 'k': 
+          e.preventDefault(); 
+          v.paused ? v.play() : v.pause(); 
+          break;
+        case 'j': 
+          e.preventDefault(); 
+          v.currentTime = Math.max(0, v.currentTime - 10); 
+          break;
+        case 'l': 
+          e.preventDefault(); 
+          v.currentTime = Math.min((duration ?? Infinity), v.currentTime + 10); 
+          break;
+        case 'm': 
+          e.preventDefault(); 
+          v.muted = !v.muted; 
+          setIsMuted(v.muted); 
+          break;
+        case 'f': 
+          e.preventDefault(); 
+          if (!document.fullscreenElement) v.requestFullscreen?.(); 
+          else document.exitFullscreen?.(); 
+          break;
+        case 't': 
+          e.preventDefault(); 
+          toggleImmersive(); 
+          break;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [toggleImmersive, duration]);
+
+  // Time formatting function
+  const fmt = useMemo(
+    () => (s?: number | null) => {
+      if (s == null || !Number.isFinite(s)) return '—:—';
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = Math.floor(s % 60);
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+    },
+    []
   );
 
   // Control handlers
@@ -208,7 +272,7 @@ export function VideoPlayer({
 
     const newTime = (percentage / 100) * duration;
     video.currentTime = newTime;
-    announce(`Seeking to ${formatTime(newTime)}`);
+    announce(`Seeking to ${fmt(newTime)}`);
   };
 
   const toggleFullscreen = () => {
@@ -222,13 +286,7 @@ export function VideoPlayer({
     }
   };
 
-  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progressPercentage = duration && duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
     <div
@@ -271,6 +329,22 @@ export function VideoPlayer({
         </div>
       )}
 
+      {/* Time display overlay */}
+      <div className="pointer-events-none absolute bottom-2 left-3 text-sm text-white/90">
+        <span>{fmt(currentTime)} / {fmt(duration)}</span>
+      </div>
+
+      {/* Theater button overlay */}
+      <div className="absolute right-3 top-3 flex gap-2">
+        <Button
+          onClick={toggleImmersive}
+          className="rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20"
+          title="Theater (T)"
+        >
+          Theater
+        </Button>
+      </div>
+
       {/* Controls overlay */}
       {controls && (
         <div
@@ -301,7 +375,7 @@ export function VideoPlayer({
             {/* Progress bar */}
             <div className="flex items-center gap-2 text-white text-sm">
               <span aria-label={`Current time: ${formatTimeForScreenReader(currentTime)}`}>
-                {formatTime(currentTime)}
+                {fmt(currentTime)}
               </span>
               <div className="flex-1">
                 <Progress
@@ -329,8 +403,8 @@ export function VideoPlayer({
                   }}
                 />
               </div>
-              <span aria-label={`Total duration: ${formatTimeForScreenReader(duration)}`}>
-                {formatTime(duration)}
+              <span aria-label={`Total duration: ${formatTimeForScreenReader(duration || 0)}`}>
+                {fmt(duration)}
               </span>
             </div>
 
@@ -380,6 +454,17 @@ export function VideoPlayer({
               </div>
 
               <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleImmersive}
+                  className="text-white hover:bg-white/20"
+                  aria-label="Theater mode (T)"
+                  title="Theater (T)"
+                >
+                  <Monitor className="h-4 w-4" aria-hidden="true" />
+                </Button>
+
                 <Button
                   variant="ghost"
                   size="icon"
