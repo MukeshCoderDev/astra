@@ -8,10 +8,35 @@ export default {
   theme: {
     container: {
       center: true,
-      padding: "2rem",
+      padding: {
+        DEFAULT: "1rem",
+        sm: "1.5rem",
+        lg: "2rem",
+        xl: "2.5rem",
+        "2xl": "3rem",
+      },
       screens: {
+        sm: "640px",
+        md: "768px",
+        lg: "1024px",
+        xl: "1280px",
         "2xl": "1400px",
       },
+    },
+    screens: {
+      'xs': '475px',
+      'sm': '640px',
+      'md': '768px',
+      'lg': '1024px',
+      'xl': '1280px',
+      '2xl': '1536px',
+      '3xl': '1920px',
+      // Accessibility-focused breakpoints
+      'touch': { 'raw': '(pointer: coarse)' },
+      'no-touch': { 'raw': '(pointer: fine)' },
+      'reduced-motion': { 'raw': '(prefers-reduced-motion: reduce)' },
+      'high-contrast': { 'raw': '(prefers-contrast: high)' },
+      'dark-mode': { 'raw': '(prefers-color-scheme: dark)' },
     },
     extend: {
       colors: {
@@ -82,9 +107,37 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
+      fontSize: {
+        'xs': ['0.75rem', { lineHeight: '1.5' }],
+        'sm': ['0.875rem', { lineHeight: '1.5' }],
+        'base': ['1rem', { lineHeight: '1.6' }],
+        'lg': ['1.125rem', { lineHeight: '1.6' }],
+        'xl': ['1.25rem', { lineHeight: '1.6' }],
+        '2xl': ['1.5rem', { lineHeight: '1.5' }],
+        '3xl': ['1.875rem', { lineHeight: '1.4' }],
+        '4xl': ['2.25rem', { lineHeight: '1.3' }],
+        '5xl': ['3rem', { lineHeight: '1.2' }],
+        '6xl': ['3.75rem', { lineHeight: '1.1' }],
+      },
+      spacing: {
+        '18': '4.5rem',
+        '88': '22rem',
+        '128': '32rem',
+      },
+      minHeight: {
+        'touch': '44px', // Minimum touch target size
+      },
+      minWidth: {
+        'touch': '44px', // Minimum touch target size
+      },
       animation: {
         'fade-in': 'fadeIn 0.2s ease-in-out',
         'slide-up': 'slideUp 0.3s ease-out',
+        'slide-down': 'slideDown 0.3s ease-out',
+        'slide-left': 'slideLeft 0.3s ease-out',
+        'slide-right': 'slideRight 0.3s ease-out',
+        'scale-in': 'scaleIn 0.2s ease-out',
+        'bounce-subtle': 'bounceSubtle 0.6s ease-out',
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },
@@ -97,6 +150,26 @@ export default {
           '0%': { transform: 'translateY(10px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         },
+        slideDown: {
+          '0%': { transform: 'translateY(-10px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        slideLeft: {
+          '0%': { transform: 'translateX(10px)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        },
+        slideRight: {
+          '0%': { transform: 'translateX(-10px)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        },
+        scaleIn: {
+          '0%': { transform: 'scale(0.95)', opacity: '0' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        bounceSubtle: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-2px)' },
+        },
         "accordion-down": {
           from: { height: "0" },
           to: { height: "var(--radix-accordion-content-height)" },
@@ -106,7 +179,44 @@ export default {
           to: { height: "0" },
         },
       },
+      // Focus ring utilities
+      ringWidth: {
+        '3': '3px',
+      },
+      ringOffsetWidth: {
+        '3': '3px',
+      },
     },
   },
-  plugins: [],
+  plugins: [
+    // Custom plugin for accessibility utilities
+    function({ addUtilities, theme }) {
+      const newUtilities = {
+        '.focus-visible-ring': {
+          '&:focus-visible': {
+            outline: 'none',
+            'ring-width': '2px',
+            'ring-color': theme('colors.ring'),
+            'ring-offset-width': '2px',
+          },
+        },
+        '.touch-target': {
+          'min-height': '44px',
+          'min-width': '44px',
+        },
+        '.high-contrast-border': {
+          '@media (prefers-contrast: high)': {
+            'border-width': '2px',
+          },
+        },
+        '.reduced-motion': {
+          '@media (prefers-reduced-motion: reduce)': {
+            'animation': 'none',
+            'transition': 'none',
+          },
+        },
+      }
+      addUtilities(newUtilities)
+    }
+  ],
 }

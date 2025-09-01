@@ -135,7 +135,7 @@ export function AccessibilityProvider({ children }: AccessibilityProviderProps) 
       {children}
       
       {/* Global accessibility styles */}
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{__html: `
         .reduce-motion *,
         .reduce-motion *::before,
         .reduce-motion *::after {
@@ -216,7 +216,7 @@ export function AccessibilityProvider({ children }: AccessibilityProviderProps) 
             transition: none !important;
           }
         }
-      `}</style>
+      `}} />
     </AccessibilityContext.Provider>
   );
 }

@@ -18,6 +18,19 @@ const ProfileRoute = lazy(() => import('../components/routing/ProfileRoute'));
 const LiveHome = lazy(() => import('../pages/Live/LiveHome'));
 const LiveWatch = lazy(() => import('../pages/Live/LiveWatch'));
 
+// Content Discovery Pages
+const Subscriptions = lazy(() => import('../pages/Discovery/Subscriptions'));
+const Explore = lazy(() => import('../pages/Discovery/Explore'));
+const Trending = lazy(() => import('../pages/Discovery/Trending'));
+const History = lazy(() => import('../pages/Discovery/History'));
+const Playlists = lazy(() => import('../pages/Discovery/Playlists'));
+const PlaylistDetail = lazy(() => import('../pages/Discovery/PlaylistDetail'));
+const PlaylistCreate = lazy(() => import('../pages/Discovery/PlaylistCreate'));
+const YourVideos = lazy(() => import('../pages/Discovery/YourVideos'));
+const WatchLater = lazy(() => import('../pages/Discovery/WatchLater'));
+const Liked = lazy(() => import('../pages/Discovery/Liked'));
+const Downloads = lazy(() => import('../pages/Discovery/Downloads'));
+
 // Loading fallback component
 function PageLoadingFallback() {
   return (
@@ -75,6 +88,61 @@ function AppRoutes() {
         <Route path="search" element={
           <LazyRoute>
             <Search />
+          </LazyRoute>
+        } />
+        <Route path="subscriptions" element={
+          <LazyRoute>
+            <Subscriptions />
+          </LazyRoute>
+        } />
+        <Route path="explore" element={
+          <LazyRoute>
+            <Explore />
+          </LazyRoute>
+        } />
+        <Route path="trending" element={
+          <LazyRoute>
+            <Trending />
+          </LazyRoute>
+        } />
+        <Route path="history" element={
+          <LazyRoute>
+            <History />
+          </LazyRoute>
+        } />
+        <Route path="playlists" element={
+          <LazyRoute>
+            <Playlists />
+          </LazyRoute>
+        } />
+        <Route path="playlists/new" element={
+          <LazyRoute>
+            <PlaylistCreate />
+          </LazyRoute>
+        } />
+        <Route path="playlists/:id" element={
+          <LazyRoute>
+            <PlaylistDetail />
+          </LazyRoute>
+        } />
+        <Route path="your-videos" element={
+          <LazyRoute>
+            <YourVideos />
+          </LazyRoute>
+        } />
+        <Route path="watch-later" element={
+          <LazyRoute>
+            <WatchLater />
+          </LazyRoute>
+        } />
+        <Route path="liked" element={
+          <LazyRoute>
+            <Liked />
+          </LazyRoute>
+        } />
+        <Route path="downloads" element={
+          <LazyRoute>
+            <Downloads />
           </LazyRoute>
         } />
         <Route path="upload" element={

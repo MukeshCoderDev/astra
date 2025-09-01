@@ -33,6 +33,10 @@ export interface Video {
   geoBlocked?: string[];
   forensicWatermark?: boolean;
   adultContent?: boolean;
+  // Extended for content discovery features
+  liked?: boolean;
+  watchLater?: boolean;
+  watchProgress?: number;
 }
 
 export interface WalletBalance {
@@ -148,6 +152,30 @@ export interface PayoutSettings {
   minimumPayout: number;
   estimatedFees: number;
   processingTime: string;
+}
+
+// Content Discovery Models
+export interface Playlist {
+  id: string;
+  title: string;
+  videoCount: number;
+  updatedAt: string;
+  cover?: string;
+  items?: Video[];
+}
+
+export interface HistoryItem {
+  id: string;
+  video: Video;
+  watchedAt: string;
+  progressPct: number;
+}
+
+export interface UploadItem {
+  video: Video;
+  status: 'processing' | 'live' | 'published' | 'failed';
+  views: number;
+  uploadedAt: string;
 }
 
 // API Response Types

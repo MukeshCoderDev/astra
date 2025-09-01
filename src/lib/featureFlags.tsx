@@ -50,11 +50,14 @@ const DEFAULT_FLAGS: FeatureFlags = {
   wallet: true,
 };
 
+// Import ENV from unified environment configuration
+import { ENV } from './env';
+
 /**
  * Parse feature flags from environment variables
  */
 function parseFeatureFlags(): FeatureFlags {
-  const envFlags = import.meta.env.REACT_APP_FEATURE_FLAGS || '';
+  const envFlags = ENV.FEATURE_FLAGS.join(',');
   const enabledFlags = envFlags.split(',').map(flag => flag.trim().toLowerCase());
   
   // If no flags specified, use defaults

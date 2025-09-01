@@ -75,6 +75,9 @@ export const ENV = {
   WS_URL: getEnvVar('VITE_WS_URL', 'NEXT_PUBLIC_WS_URL', 'ws://localhost:3001'),
   CDN_BASE: getEnvVar('VITE_CDN_BASE', 'NEXT_PUBLIC_CDN_BASE', 'http://localhost:3001/cdn'),
   
+  // Content discovery
+  DEFAULT_REGION: getEnvVar('VITE_DEFAULT_REGION', 'NEXT_PUBLIC_DEFAULT_REGION', 'US'),
+  
   // Upload configuration
   UPLOAD_TUS_ENDPOINT: getEnvVar('VITE_UPLOAD_TUS_ENDPOINT', 'NEXT_PUBLIC_UPLOAD_TUS_ENDPOINT', 'http://localhost:3001/files/'),
   
@@ -96,6 +99,62 @@ export const features = {
   shorts: hasFeature('shorts'),
   live: hasFeature('live'),
   watermark: hasFeature('watermark'),
+  adultContent: ENV.ADULT,
+  ageGate: ENV.ADULT,
+  kyc: hasFeature('kyc'),
+  geoBlocking: hasFeature('geo'),
+  escrow: hasFeature('escrow'),
+  analytics: hasFeature('analytics'),
+  notifications: hasFeature('notifications'),
+  chat: hasFeature('chat'),
+  tips: hasFeature('tips'),
+  uploads: hasFeature('uploads'),
+  profiles: hasFeature('profiles'),
+  search: hasFeature('search'),
+  comments: hasFeature('comments'),
+  reports: hasFeature('reports'),
+  studio: hasFeature('studio'),
+  wallet: hasFeature('wallet'),
+} as const;
+
+/**
+ * Feature flag management for gradual rollout
+ */
+export const featureRollout = {
+  // Check if feature is enabled for a specific user/session
+  isEnabledForUser: (feature: string, userId?: string): boolean => {
+    // Base feature flag check
+    if (!hasFeature(feature)) return false;
+    
+    // For gradual rollout, you can implement percentage-based rollout
+    // This is a simple example - in production you'd use a proper feature flag service
+    if (userId) {
+      const hash = userId.split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0);
+        return a & a;
+      }, 0);
+      const percentage = Math.abs(hash) % 100;
+      
+      // Example: roll out to 50% of users for 'beta' features
+      if (feature.includes('beta')) {
+        return percentage < 50;
+      }
+    }
+    
+    return true;
+  },
+  
+  // Get rollout percentage for a feature
+  getRolloutPercentage: (feature: string): number => {
+    // This could be configured via environment variables or API
+    const rolloutConfig: Record<string, number> = {
+      'beta-shorts': 50,
+      'beta-live': 25,
+      'beta-analytics': 75,
+    };
+    
+    return rolloutConfig[feature] || 100;
+  },
 } as const;
 
 /**
@@ -170,6 +229,33 @@ export const validateEnv = () => {
   return warnings.length === 0;
 };
 
+/**
+ * Production-ready configuration export
+ */
+export const config = {
+  api: {
+    base: ENV.API_BASE,
+    ws: ENV.WS_URL,
+    cdn: ENV.CDN_BASE,
+    upload: ENV.UPLOAD_TUS_ENDPOINT,
+    ipfs: ENV.IPFS_GATEWAY,
+  },
+  features: {
+    ...features,
+    rollout: featureRollout,
+  },
+  compliance: {
+    adult: ENV.ADULT,
+    ageGate: ageGate,
+  },
+  discovery: {
+    defaultRegion: ENV.DEFAULT_REGION,
+  },
+  live: {
+    enabled: ENV.LIVE_ENABLED,
+  },
+} as const;
+
 // Debug logging in development
 if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
   console.log('🔧 Environment Configuration Loaded:', {
@@ -178,9 +264,14 @@ if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
     AGE_TTL_DAYS: ENV.AGE_TTL_DAYS,
     API_BASE: ENV.API_BASE,
     WS_URL: ENV.WS_URL,
+    DEFAULT_REGION: ENV.DEFAULT_REGION,
+    FEATURE_FLAGS: ENV.FEATURE_FLAGS,
     availableEnvVars: typeof import.meta !== 'undefined' ? Object.keys(import.meta.env) : 'N/A'
   });
 }
 
 // Validate configuration on module load
-validateEnv();
+const isValid = validateEnv();
+
+// Export validation result for external use
+export const configurationValid = isValid;

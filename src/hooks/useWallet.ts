@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { WalletBalance, TipTransaction } from '../types';
 
@@ -36,12 +36,6 @@ export function useWallet(options: UseWalletOptions = {}) {
     },
     staleTime: 30000, // 30 seconds
     refetchInterval: 60000, // Refetch every minute
-    onSuccess: (data) => {
-      onBalanceUpdate?.(data);
-    },
-    onError: (error) => {
-      onError?.(error as Error);
-    }
   });
 
   // Fetch transaction history
@@ -60,9 +54,6 @@ export function useWallet(options: UseWalletOptions = {}) {
       return response.json();
     },
     staleTime: 60000, // 1 minute
-    onError: (error) => {
-      onError?.(error as Error);
-    }
   });
 
   // Add funds mutation
@@ -160,6 +151,26 @@ export function useWallet(options: UseWalletOptions = {}) {
       onError?.(error as Error);
     }
   });
+
+  // Handle balance updates
+  useEffect(() => {
+    if (balance && onBalanceUpdate) {
+      onBalanceUpdate(balance);
+    }
+  }, [balance, onBalanceUpdate]);
+
+  // Handle errors
+  useEffect(() => {
+    if (balanceError && onError) {
+      onError(balanceError as Error);
+    }
+  }, [balanceError, onError]);
+
+  useEffect(() => {
+    if (transactionsError && onError) {
+      onError(transactionsError as Error);
+    }
+  }, [transactionsError, onError]);
 
   // Connect wallet (for future Web3 integration)
   const connectWallet = useCallback(async () => {

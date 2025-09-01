@@ -8,7 +8,21 @@ import { AppIntegration } from './components/app/AppIntegration';
 import { AnalyticsProvider } from './lib/analytics';
 import { CriticalErrorBoundary } from './components/monitoring/ErrorBoundary';
 import { PerformanceMonitor } from './components/monitoring/PerformanceMonitor';
+import { usePerformanceMonitoring, usePageTracking } from './lib/monitoring';
+import { errorLogger } from './lib/errorLogging';
+import { useEffect } from 'react';
 import AppRoutes from './routes/AppRoutes';
+
+function AppWithMonitoring() {
+  usePerformanceMonitoring();
+  usePageTracking();
+  
+  useEffect(() => {
+    errorLogger.info('App component mounted');
+  }, []);
+
+  return <AppRoutes />;
+}
 
 function App() {
   return (
@@ -21,7 +35,7 @@ function App() {
                 <AnalyticsProvider>
                   <ToastProvider>
                     <SocketProvider>
-                      <AppRoutes />
+                      <AppWithMonitoring />
                       <PerformanceMonitor />
                     </SocketProvider>
                   </ToastProvider>

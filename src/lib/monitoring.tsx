@@ -1,546 +1,397 @@
 /**
- * Comprehensive monitoring and error tracking system
- * Handles performance monitoring, error reporting, and user analytics
+ * Comprehensive monitoring and analytics integration
  */
 
-import React from 'react';
+import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { getCLS, getFID, getFCP, getLCP, getTTFB } from 'web-vitals';
 
-interface ErrorReport {
-  message: string;
-  stack?: string;
-  url: string;
-  lineNumber?: number;
-  columnNumber?: number;
-  timestamp: number;
-  userId?: string;
-  sessionId: string;
-  userAgent: string;
-  additionalData?: Record<string, any>;
-}
-
-interface PerformanceMetric {
+// Types for monitoring events
+export interface PerformanceMetric {
   name: string;
   value: number;
-  timestamp: number;
-  tags?: Record<string, string>;
+  rating: 'good' | 'needs-improvement' | 'poor';
+  delta: number;
+  id: string;
+  navigationType: string;
 }
 
-interface UserAction {
-  action: string;
+export interface UserInteractionEvent {
+  type: 'click' | 'scroll' | 'search' | 'video_play' | 'video_pause' | 'like' | 'share' | 'subscribe';
   element?: string;
   page: string;
   timestamp: number;
   userId?: string;
-  sessionId: string;
-  additionalData?: Record<string, any>;
+  videoId?: string;
+  metadata?: Record<string, any>;
 }
 
-class MonitoringService {
-  private sessionId: string;
+export interface ErrorEvent {
+  type: 'javascript' | 'network' | 'chunk_load' | 'api' | 'video_playback';
+  message: string;
+  stack?: string;
+  url?: string;
+  line?: number;
+  column?: number;
+  timestamp: number;
+  userId?: string;
+  page: string;
+  userAgent: string;
+  metadata?: Record<string, any>;
+}
+
+// Analytics service interface
+interface AnalyticsService {
+  trackPageView: (page: string, title: string) => void;
+  trackEvent: (event: UserInteractionEvent) => void;
+  trackError: (error: ErrorEvent) => void;
+  trackPerformance: (metric: PerformanceMetric) => void;
+  setUserId: (userId: string) => void;
+  setUserProperties: (properties: Record<string, any>) => void;
+}
+
+// Mock analytics service (replace with actual service like Google Analytics, Mixpanel, etc.)
+class MockAnalyticsService implements AnalyticsService {
   private userId?: string;
-  private errorQueue: ErrorReport[] = [];
-  private performanceQueue: PerformanceMetric[] = [];
-  private userActionQueue: UserAction[] = [];
-  private isInitialized = false;
+  private userProperties: Record<string, any> = {};
 
-  constructor() {
-    this.sessionId = this.generateSessionId();
-    this.initializeMonitoring();
-  }
-
-  private generateSessionId(): string {
-    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  private initializeMonitoring() {
-    if (typeof window === 'undefined') return;
-
-    // Global error handler
-    window.addEventListener('error', (event) => {
-      this.reportError({
-        message: event.message,
-        stack: event.error?.stack,
-        url: event.filename || window.location.href,
-        lineNumber: event.lineno,
-        columnNumber: event.colno,
-        timestamp: Date.now(),
-        sessionId: this.sessionId,
-        userAgent: navigator.userAgent,
-        userId: this.userId,
-      });
-    });
-
-    // Unhandled promise rejection handler
-    window.addEventListener('unhandledrejection', (event) => {
-      this.reportError({
-        message: `Unhandled Promise Rejection: ${event.reason}`,
-        stack: event.reason?.stack,
-        url: window.location.href,
-        timestamp: Date.now(),
-        sessionId: this.sessionId,
-        userAgent: navigator.userAgent,
-        userId: this.userId,
-        additionalData: { type: 'unhandledRejection' },
-      });
-    });
-
-    // Performance monitoring
-    if ('PerformanceObserver' in window) {
-      this.initializePerformanceMonitoring();
+  trackPageView(page: string, title: string) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📊 Page View:', { page, title, userId: this.userId });
     }
-
-    // User interaction tracking
-    this.initializeUserActionTracking();
-
-    // Core Web Vitals monitoring
-    this.initializeCoreWebVitals();
-
-    this.isInitialized = true;
+    
+    // In production, send to your analytics service
+    // Example: gtag('config', 'GA_MEASUREMENT_ID', { page_title: title, page_location: page });
   }
 
-  private initializePerformanceMonitoring() {
-    // Navigation timing
-    const navObserver = new PerformanceObserver((list) => {
-      list.getEntries().forEach((entry) => {
-        if (entry.entryType === 'navigation') {
-          const navEntry = entry as PerformanceNavigationTiming;
-          this.reportPerformanceMetric({
-            name: 'page_load_time',
-            value: navEntry.loadEventEnd - navEntry.loadEventStart,
-            timestamp: Date.now(),
-            tags: { page: window.location.pathname },
-          });
-
-          this.reportPerformanceMetric({
-            name: 'dom_content_loaded',
-            value: navEntry.domContentLoadedEventEnd - navEntry.domContentLoadedEventStart,
-            timestamp: Date.now(),
-            tags: { page: window.location.pathname },
-          });
-        }
-      });
-    });
-
-    navObserver.observe({ entryTypes: ['navigation'] });
-
-    // Resource timing
-    const resourceObserver = new PerformanceObserver((list) => {
-      list.getEntries().forEach((entry) => {
-        const resourceEntry = entry as PerformanceResourceTiming;
-        
-        // Track slow resources
-        if (resourceEntry.duration > 1000) {
-          this.reportPerformanceMetric({
-            name: 'slow_resource',
-            value: resourceEntry.duration,
-            timestamp: Date.now(),
-            tags: {
-              resource: resourceEntry.name,
-              type: this.getResourceType(resourceEntry.name),
-            },
-          });
-        }
-      });
-    });
-
-    resourceObserver.observe({ entryTypes: ['resource'] });
-
-    // Long task monitoring
-    const longTaskObserver = new PerformanceObserver((list) => {
-      list.getEntries().forEach((entry) => {
-        this.reportPerformanceMetric({
-          name: 'long_task',
-          value: entry.duration,
-          timestamp: Date.now(),
-          tags: { page: window.location.pathname },
-        });
-      });
-    });
-
-    longTaskObserver.observe({ entryTypes: ['longtask'] });
-  }
-
-  private initializeCoreWebVitals() {
-    // Import web-vitals dynamically with error handling
-    try {
-      import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
-        getCLS((metric) => {
-          this.reportPerformanceMetric({
-            name: 'cls',
-            value: metric.value,
-            timestamp: Date.now(),
-            tags: { page: window.location.pathname },
-          });
-        });
-
-        getFID((metric) => {
-          this.reportPerformanceMetric({
-            name: 'fid',
-            value: metric.value,
-            timestamp: Date.now(),
-            tags: { page: window.location.pathname },
-          });
-        });
-
-        getFCP((metric) => {
-          this.reportPerformanceMetric({
-            name: 'fcp',
-            value: metric.value,
-            timestamp: Date.now(),
-            tags: { page: window.location.pathname },
-          });
-        });
-
-        getLCP((metric) => {
-          this.reportPerformanceMetric({
-            name: 'lcp',
-            value: metric.value,
-            timestamp: Date.now(),
-            tags: { page: window.location.pathname },
-          });
-        });
-
-        getTTFB((metric) => {
-          this.reportPerformanceMetric({
-            name: 'ttfb',
-            value: metric.value,
-            timestamp: Date.now(),
-            tags: { page: window.location.pathname },
-          });
-        });
-      }).catch((error) => {
-        console.warn('Failed to load web-vitals:', error);
-      });
-    } catch (error) {
-      console.warn('Web-vitals not available:', error);
+  trackEvent(event: UserInteractionEvent) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📊 Event:', event);
     }
+    
+    // In production, send to your analytics service
+    // Example: gtag('event', event.type, { ...event });
   }
 
-  private initializeUserActionTracking() {
-    // Click tracking
-    document.addEventListener('click', (event) => {
-      const target = event.target as HTMLElement;
-      const element = this.getElementSelector(target);
-      
-      this.reportUserAction({
-        action: 'click',
-        element,
-        page: window.location.pathname,
-        timestamp: Date.now(),
-        sessionId: this.sessionId,
-        userId: this.userId,
-        additionalData: {
-          x: event.clientX,
-          y: event.clientY,
-          button: event.button,
-        },
-      });
-    });
-
-    // Form submission tracking
-    document.addEventListener('submit', (event) => {
-      const target = event.target as HTMLFormElement;
-      const formId = target.id || target.className || 'unknown';
-      
-      this.reportUserAction({
-        action: 'form_submit',
-        element: formId,
-        page: window.location.pathname,
-        timestamp: Date.now(),
-        sessionId: this.sessionId,
-        userId: this.userId,
-      });
-    });
-
-    // Page visibility changes
-    document.addEventListener('visibilitychange', () => {
-      this.reportUserAction({
-        action: document.hidden ? 'page_hidden' : 'page_visible',
-        page: window.location.pathname,
-        timestamp: Date.now(),
-        sessionId: this.sessionId,
-        userId: this.userId,
-      });
-    });
+  trackError(error: ErrorEvent) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('🚨 Error:', error);
+    }
+    
+    // In production, send to error tracking service like Sentry
+    // Example: Sentry.captureException(new Error(error.message), { extra: error });
   }
 
-  private getResourceType(url: string): string {
-    if (url.includes('.js')) return 'script';
-    if (url.includes('.css')) return 'stylesheet';
-    if (url.match(/\.(jpg|jpeg|png|gif|webp|svg)$/)) return 'image';
-    if (url.match(/\.(mp4|webm|ogg|m3u8)$/)) return 'video';
-    if (url.match(/\.(woff|woff2|ttf|eot)$/)) return 'font';
-    return 'other';
-  }
-
-  private getElementSelector(element: HTMLElement): string {
-    if (element.id) return `#${element.id}`;
-    if (element.className) return `.${element.className.split(' ')[0]}`;
-    return element.tagName.toLowerCase();
+  trackPerformance(metric: PerformanceMetric) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('⚡ Performance:', metric);
+    }
+    
+    // In production, send to performance monitoring service
+    // Example: gtag('event', metric.name, { value: metric.value, rating: metric.rating });
   }
 
   setUserId(userId: string) {
     this.userId = userId;
-  }
-
-  reportError(error: Partial<ErrorReport>) {
-    const errorReport: ErrorReport = {
-      message: error.message || 'Unknown error',
-      stack: error.stack,
-      url: error.url || window.location.href,
-      lineNumber: error.lineNumber,
-      columnNumber: error.columnNumber,
-      timestamp: error.timestamp || Date.now(),
-      sessionId: this.sessionId,
-      userAgent: navigator.userAgent,
-      userId: this.userId,
-      additionalData: error.additionalData,
-    };
-
-    this.errorQueue.push(errorReport);
-    this.flushErrorQueue();
-
-    // Log to console in development
-    if (import.meta.env.DEV) {
-      console.error('Error reported:', errorReport);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('👤 User ID set:', userId);
     }
-  }
-
-  reportPerformanceMetric(metric: PerformanceMetric) {
-    this.performanceQueue.push(metric);
-    this.flushPerformanceQueue();
-
-    // Log to console in development
-    if (import.meta.env.DEV) {
-      console.log('Performance metric:', metric);
-    }
-  }
-
-  reportUserAction(action: UserAction) {
-    this.userActionQueue.push(action);
-    this.flushUserActionQueue();
-
-    // Log to console in development
-    if (import.meta.env.DEV && action.action !== 'click') {
-      console.log('User action:', action);
-    }
-  }
-
-  private async flushErrorQueue() {
-    if (this.errorQueue.length === 0) return;
-
-    const errors = [...this.errorQueue];
-    this.errorQueue = [];
-
-    try {
-      await this.sendToMonitoringService('/api/monitoring/errors', errors);
-    } catch (error) {
-      console.error('Failed to send error reports:', error);
-      // Re-queue errors for retry
-      this.errorQueue.unshift(...errors);
-    }
-  }
-
-  private async flushPerformanceQueue() {
-    if (this.performanceQueue.length === 0) return;
-
-    const metrics = [...this.performanceQueue];
-    this.performanceQueue = [];
-
-    try {
-      await this.sendToMonitoringService('/api/monitoring/performance', metrics);
-    } catch (error) {
-      console.error('Failed to send performance metrics:', error);
-      // Don't re-queue performance metrics to avoid memory issues
-    }
-  }
-
-  private async flushUserActionQueue() {
-    if (this.userActionQueue.length === 0) return;
-
-    const actions = [...this.userActionQueue];
-    this.userActionQueue = [];
-
-    try {
-      await this.sendToMonitoringService('/api/monitoring/actions', actions);
-    } catch (error) {
-      console.error('Failed to send user actions:', error);
-      // Don't re-queue user actions to avoid memory issues
-    }
-  }
-
-  private async sendToMonitoringService(endpoint: string, data: any[]) {
-    if (import.meta.env.DEV) {
-      // Don't send to monitoring service in development
-      return;
-    }
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        data,
-        sessionId: this.sessionId,
-        userId: this.userId,
-        timestamp: Date.now(),
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Monitoring service error: ${response.status}`);
-    }
-  }
-
-  // Manual error reporting
-  captureException(error: Error, additionalData?: Record<string, any>) {
-    this.reportError({
-      message: error.message,
-      stack: error.stack,
-      url: window.location.href,
-      timestamp: Date.now(),
-      sessionId: this.sessionId,
-      userAgent: navigator.userAgent,
-      userId: this.userId,
-      additionalData,
-    });
-  }
-
-  // Manual performance tracking
-  startPerformanceTimer(name: string): () => void {
-    const startTime = performance.now();
     
-    return () => {
-      const duration = performance.now() - startTime;
-      this.reportPerformanceMetric({
-        name,
-        value: duration,
-        timestamp: Date.now(),
-        tags: { page: window.location.pathname },
-      });
-    };
+    // In production, set user ID in analytics service
+    // Example: gtag('config', 'GA_MEASUREMENT_ID', { user_id: userId });
   }
 
-  // Health check
-  getHealthStatus() {
-    return {
-      initialized: this.isInitialized,
-      sessionId: this.sessionId,
-      userId: this.userId,
-      queueSizes: {
-        errors: this.errorQueue.length,
-        performance: this.performanceQueue.length,
-        userActions: this.userActionQueue.length,
-      },
-    };
+  setUserProperties(properties: Record<string, any>) {
+    this.userProperties = { ...this.userProperties, ...properties };
+    if (process.env.NODE_ENV === 'development') {
+      console.log('👤 User Properties:', this.userProperties);
+    }
+    
+    // In production, set user properties in analytics service
+    // Example: gtag('set', { user_properties: properties });
   }
 }
 
-// Global monitoring instance
-const monitoring = new MonitoringService();
+// Global analytics instance
+export const analytics = new MockAnalyticsService();
 
-// Export monitoring functions
-export function setUserId(userId: string) {
-  monitoring.setUserId(userId);
+// Web Vitals monitoring
+export function initializeWebVitals() {
+  const sendToAnalytics = (metric: any) => {
+    const performanceMetric: PerformanceMetric = {
+      name: metric.name,
+      value: metric.value,
+      rating: metric.rating,
+      delta: metric.delta,
+      id: metric.id,
+      navigationType: metric.navigationType || 'navigate',
+    };
+    
+    analytics.trackPerformance(performanceMetric);
+  };
+
+  getCLS(sendToAnalytics);
+  getFID(sendToAnalytics);
+  getFCP(sendToAnalytics);
+  getLCP(sendToAnalytics);
+  getTTFB(sendToAnalytics);
 }
 
-export function captureException(error: Error, additionalData?: Record<string, any>) {
-  monitoring.captureException(error, additionalData);
-}
-
-export function reportPerformanceMetric(name: string, value: number, tags?: Record<string, string>) {
-  monitoring.reportPerformanceMetric({
-    name,
-    value,
-    timestamp: Date.now(),
-    tags,
+// Error monitoring
+export function initializeErrorMonitoring() {
+  // JavaScript errors
+  window.addEventListener('error', (event) => {
+    const errorEvent: ErrorEvent = {
+      type: 'javascript',
+      message: event.message,
+      stack: event.error?.stack,
+      url: event.filename,
+      line: event.lineno,
+      column: event.colno,
+      timestamp: Date.now(),
+      page: window.location.pathname,
+      userAgent: navigator.userAgent,
+    };
+    
+    analytics.trackError(errorEvent);
   });
+
+  // Unhandled promise rejections
+  window.addEventListener('unhandledrejection', (event) => {
+    const errorEvent: ErrorEvent = {
+      type: 'javascript',
+      message: event.reason?.message || 'Unhandled promise rejection',
+      stack: event.reason?.stack,
+      timestamp: Date.now(),
+      page: window.location.pathname,
+      userAgent: navigator.userAgent,
+      metadata: { reason: event.reason },
+    };
+    
+    analytics.trackError(errorEvent);
+  });
+
+  // Chunk load errors (for code splitting)
+  window.addEventListener('error', (event) => {
+    if (event.target && 'src' in event.target && typeof event.target.src === 'string') {
+      if (event.target.src.includes('.js') || event.target.src.includes('.css')) {
+        const errorEvent: ErrorEvent = {
+          type: 'chunk_load',
+          message: `Failed to load resource: ${event.target.src}`,
+          url: event.target.src,
+          timestamp: Date.now(),
+          page: window.location.pathname,
+          userAgent: navigator.userAgent,
+        };
+        
+        analytics.trackError(errorEvent);
+      }
+    }
+  }, true);
 }
 
-export function startPerformanceTimer(name: string) {
-  return monitoring.startPerformanceTimer(name);
+// Network monitoring
+export function trackNetworkError(url: string, status: number, message: string) {
+  const errorEvent: ErrorEvent = {
+    type: 'network',
+    message: `Network error: ${status} - ${message}`,
+    url,
+    timestamp: Date.now(),
+    page: window.location.pathname,
+    userAgent: navigator.userAgent,
+    metadata: { status, url },
+  };
+  
+  analytics.trackError(errorEvent);
 }
 
-export function reportUserAction(action: string, element?: string, additionalData?: Record<string, any>) {
-  monitoring.reportUserAction({
-    action,
+// API monitoring
+export function trackApiError(endpoint: string, method: string, status: number, error: any) {
+  const errorEvent: ErrorEvent = {
+    type: 'api',
+    message: `API error: ${method} ${endpoint} - ${status}`,
+    timestamp: Date.now(),
+    page: window.location.pathname,
+    userAgent: navigator.userAgent,
+    metadata: { endpoint, method, status, error },
+  };
+  
+  analytics.trackError(errorEvent);
+}
+
+// Video playback monitoring
+export function trackVideoError(videoId: string, error: any) {
+  const errorEvent: ErrorEvent = {
+    type: 'video_playback',
+    message: `Video playback error: ${error.message || 'Unknown error'}`,
+    timestamp: Date.now(),
+    page: window.location.pathname,
+    userAgent: navigator.userAgent,
+    metadata: { videoId, error },
+  };
+  
+  analytics.trackError(errorEvent);
+}
+
+// User interaction tracking
+export function trackUserInteraction(
+  type: UserInteractionEvent['type'],
+  element?: string,
+  metadata?: Record<string, any>
+) {
+  const event: UserInteractionEvent = {
+    type,
     element,
     page: window.location.pathname,
     timestamp: Date.now(),
-    sessionId: monitoring['sessionId'],
-    userId: monitoring['userId'],
-    additionalData,
-  });
+    metadata,
+  };
+  
+  analytics.trackEvent(event);
 }
 
-export function getMonitoringHealth() {
-  return monitoring.getHealthStatus();
-}
-
-// React hooks for monitoring
-export function useErrorHandler() {
-  return {
-    captureException,
-    reportError: (message: string, additionalData?: Record<string, any>) => {
-      monitoring.reportError({
-        message,
-        url: window.location.href,
-        timestamp: Date.now(),
-        additionalData,
-      });
+// Content discovery specific tracking
+export function trackContentDiscovery(action: string, content: any, metadata?: Record<string, any>) {
+  const event: UserInteractionEvent = {
+    type: action as any,
+    page: window.location.pathname,
+    timestamp: Date.now(),
+    videoId: content.id,
+    metadata: {
+      contentType: content.type,
+      creator: content.creator?.handle,
+      category: content.category,
+      ...metadata,
     },
   };
+  
+  analytics.trackEvent(event);
 }
 
-export function usePerformanceMonitor() {
-  return {
-    startTimer: startPerformanceTimer,
-    reportMetric: reportPerformanceMetric,
-  };
-}
-
-// Higher-order component for error boundaries
-export function withErrorMonitoring<P extends object>(
-  Component: React.ComponentType<P>
-) {
-  return function MonitoredComponent(props: P) {
-    React.useEffect(() => {
-      const originalConsoleError = console.error;
-      
-      console.error = (...args) => {
-        // Report React errors to monitoring
-        if (args[0]?.includes?.('React')) {
-          captureException(new Error(args.join(' ')), {
-            type: 'react_error',
-            component: Component.name,
+// Performance monitoring hook
+export function usePerformanceMonitoring() {
+  useEffect(() => {
+    // Monitor page load performance
+    const observer = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (entry.entryType === 'navigation') {
+          const navEntry = entry as PerformanceNavigationTiming;
+          
+          // Track key timing metrics
+          const metrics = {
+            dns: navEntry.domainLookupEnd - navEntry.domainLookupStart,
+            tcp: navEntry.connectEnd - navEntry.connectStart,
+            request: navEntry.responseStart - navEntry.requestStart,
+            response: navEntry.responseEnd - navEntry.responseStart,
+            dom: navEntry.domContentLoadedEventEnd - navEntry.responseEnd,
+            load: navEntry.loadEventEnd - navEntry.loadEventStart,
+          };
+          
+          Object.entries(metrics).forEach(([name, value]) => {
+            if (value > 0) {
+              analytics.trackPerformance({
+                name: `timing_${name}`,
+                value,
+                rating: value < 100 ? 'good' : value < 300 ? 'needs-improvement' : 'poor',
+                delta: 0,
+                id: `${name}_${Date.now()}`,
+                navigationType: 'navigate',
+              });
+            }
           });
         }
-        originalConsoleError.apply(console, args);
-      };
+      }
+    });
 
-      return () => {
-        console.error = originalConsoleError;
-      };
-    }, []);
+    observer.observe({ entryTypes: ['navigation'] });
 
-    return <Component {...props} />;
+    return () => observer.disconnect();
+  }, []);
+}
+
+// Page view tracking hook
+export function usePageTracking() {
+  const location = useLocation();
+
+  useEffect(() => {
+    // Track page view
+    const title = document.title;
+    analytics.trackPageView(location.pathname, title);
+    
+    // Track page timing
+    const startTime = performance.now();
+    
+    return () => {
+      const endTime = performance.now();
+      const timeOnPage = endTime - startTime;
+      
+      analytics.trackEvent({
+        type: 'scroll', // Using scroll as a generic interaction type
+        page: location.pathname,
+        timestamp: Date.now(),
+        metadata: { timeOnPage, action: 'page_exit' },
+      });
+    };
+  }, [location.pathname]);
+}
+
+// Initialize all monitoring
+export function initializeMonitoring() {
+  if (typeof window !== 'undefined') {
+    initializeWebVitals();
+    initializeErrorMonitoring();
+    
+    // Track initial page load
+    analytics.trackPageView(window.location.pathname, document.title);
+  }
+}
+
+// Error capture function for error boundaries
+export function captureException(error: Error, context?: Record<string, any>) {
+  const errorEvent: ErrorEvent = {
+    type: 'javascript',
+    message: error.message,
+    stack: error.stack,
+    timestamp: Date.now(),
+    page: window.location.pathname,
+    userAgent: navigator.userAgent,
+    metadata: context,
+  };
+  
+  analytics.trackError(errorEvent);
+}
+
+// Performance metric reporting
+export function reportPerformanceMetric(name: string, value: number, context?: Record<string, any>) {
+  const performanceMetric: PerformanceMetric = {
+    name,
+    value,
+    rating: value < 100 ? 'good' : value < 300 ? 'needs-improvement' : 'poor',
+    delta: 0,
+    id: `${name}_${Date.now()}`,
+    navigationType: 'navigate',
+  };
+  
+  analytics.trackPerformance(performanceMetric);
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`⚡ Performance Metric: ${name}`, { value, context });
+  }
+}
+
+// Monitoring health status
+export function getMonitoringHealth() {
+  return {
+    sessionId: `session_${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    queueSizes: {
+      errors: 0,
+      performance: 0,
+    },
+    status: 'healthy',
+    uptime: performance.now(),
   };
 }
 
-// Performance monitoring decorator
-export function withPerformanceMonitoring<P extends object>(
-  componentName: string,
-  Component: React.ComponentType<P>
-) {
-  return function PerformanceMonitoredComponent(props: P) {
-    React.useEffect(() => {
-      const endTimer = startPerformanceTimer(`component_render_${componentName}`);
-      return endTimer;
-    }, []);
-
-    return <Component {...props} />;
-  };
-}
-
-export default monitoring;
+// Export analytics instance as default
+export default analytics;

@@ -71,11 +71,16 @@ export async function apiGet<T = any>(endpoint: string): Promise<ApiResponse<T>>
  */
 export async function apiPost<T = any>(
   endpoint: string,
-  data?: any
+  data?: any,
+  options?: RequestInit
 ): Promise<ApiResponse<T>> {
   return apiRequest<T>(endpoint, {
     method: 'POST',
     body: data ? JSON.stringify(data) : undefined,
+    ...options,
+    headers: {
+      ...options?.headers,
+    },
   });
 }
 
