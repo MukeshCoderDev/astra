@@ -214,6 +214,134 @@ export const handlers = [
     });
   }),
 
+  // Live streaming endpoints
+  http.get(`${API_BASE}/live/feed`, () => {
+    return HttpResponse.json({
+      now: [
+        {
+          id: 'stream-1',
+          title: 'Live Gaming Session',
+          poster: 'https://example.com/poster1.jpg',
+          viewers: 1250,
+          status: 'live',
+          creator: {
+            id: 'creator-1',
+            handle: 'gamer123',
+          },
+          hlsUrl: 'https://cdn.example.com/stream1.m3u8',
+          dvrWindowSec: 300,
+        },
+        {
+          id: 'stream-2',
+          title: 'Cooking Show',
+          poster: 'https://example.com/poster2.jpg',
+          viewers: 850,
+          status: 'live',
+          creator: {
+            id: 'creator-2',
+            handle: 'chef_master',
+          },
+          hlsUrl: 'https://cdn.example.com/stream2.m3u8',
+        },
+      ],
+      upcoming: [
+        {
+          id: 'stream-3',
+          title: 'Music Performance',
+          poster: 'https://example.com/poster3.jpg',
+          scheduled: true,
+          startAt: new Date(Date.now() + 3600000).toISOString(),
+          status: 'preview',
+          creator: {
+            id: 'creator-3',
+            handle: 'musician_pro',
+          },
+        },
+      ],
+    });
+  }),
+
+  http.get(`${API_BASE}/live/streams/:id`, ({ params }) => {
+    const streamId = params.id;
+    
+    const mockStreams = {
+      'stream-1': {
+        id: 'stream-1',
+        title: 'Live Gaming Session',
+        poster: 'https://example.com/poster1.jpg',
+        viewers: 1250,
+        status: 'live',
+        creator: {
+          id: 'creator-1',
+          handle: 'gamer123',
+        },
+        hlsUrl: 'https://cdn.example.com/stream1.m3u8',
+        dvrWindowSec: 300,
+      },
+      'stream-2': {
+        id: 'stream-2',
+        title: 'Cooking Show',
+        poster: 'https://example.com/poster2.jpg',
+        viewers: 850,
+        status: 'live',
+        creator: {
+          id: 'creator-2',
+          handle: 'chef_master',
+        },
+        hlsUrl: 'https://cdn.example.com/stream2.m3u8',
+      },
+    };
+
+    const stream = mockStreams[streamId as keyof typeof mockStreams];
+    if (!stream) {
+      return new HttpResponse(null, { status: 404 });
+    }
+    
+    return HttpResponse.json(stream);
+  }),
+
+  http.get(`${API_BASE}/live/streams/:id/chat`, ({ request, params }) => {
+    const url = new URL(request.url);
+    const since = parseInt(url.searchParams.get('since') || '0');
+    
+    const mockMessages = [
+      {
+        id: 'msg-1',
+        user: { id: 'user-1', handle: 'viewer1' },
+        text: 'Great stream!',
+        ts: Math.floor(Date.now() / 1000) - 60,
+      },
+      {
+        id: 'msg-2',
+        user: { id: 'user-2', handle: 'viewer2' },
+        text: 'Love this content',
+        ts: Math.floor(Date.now() / 1000) - 30,
+        pinned: true,
+      },
+    ];
+
+    // Filter messages newer than 'since' timestamp
+    const filteredMessages = mockMessages.filter(msg => msg.ts > since);
+    
+    return HttpResponse.json(filteredMessages);
+  }),
+
+  http.post(`${API_BASE}/live/streams/:id/chat`, async ({ request, params }) => {
+    const body = await request.json() as any;
+    
+    return HttpResponse.json({
+      id: `msg-${Date.now()}`,
+      user: { id: 'user-1', handle: 'testuser' },
+      text: body.text,
+      ts: Math.floor(Date.now() / 1000),
+    });
+  }),
+
+  http.post(`${API_BASE}/analytics/metrics`, async ({ request }) => {
+    const body = await request.json() as any;
+    return HttpResponse.json({ success: true });
+  }),
+
   // Error simulation endpoints for testing
   http.get(`${API_BASE}/error/500`, () => {
     return new HttpResponse(null, { status: 500 });

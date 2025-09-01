@@ -1,113 +1,79 @@
 import { useEffect, useState } from 'react';
-import { env } from '@/lib/env';
+import { env, ageGate } from '../../lib/env';
 
 function AgeGate() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!env.ADULT_CONTENT) return;
-
-    const checkAgeVerification = () => {
-      const ack = localStorage.getItem('age_ack');
-      const timestamp = localStorage.getItem('age_ack_ts');
-      
-      if (!ack || !timestamp) {
-        setIsOpen(true);
-        return;
-      }
-
-      const ackTime = parseInt(timestamp);
-      const ttlMs = env.AGE_GATE_TTL_DAYS * 24 * 60 * 60 * 1000;
-      const isExpired = Date.now() - ackTime > ttlMs;
-
-      if (isExpired) {
-        setIsOpen(true);
-      }
-    };
-
-    checkAgeVerification();
+    // Debug logging
+    console.log('🔞 AgeGate Debug Info:');
+    console.log('- ADULT_CONTENT enabled:', env.ADULT_CONTENT);
+    console.log('- ageGate.isEnabled():', ageGate.isEnabled());
+    
+    const consentStatus = ageGate.getConsentStatus();
+    console.log('- Consent Status:', consentStatus);
+    
+    if (consentStatus.required && !consentStatus.valid) {
+      console.log('✅ Age gate should open - setting open to true');
+      setOpen(true);
+    } else {
+      console.log('❌ Age gate will not open:', {
+        required: consentStatus.required,
+        valid: consentStatus.valid
+      });
+    }
   }, []);
 
-  const handleAccept = async () => {
-    const timestamp = Date.now().toString();
-    localStorage.setItem('age_ack', '1');
-    localStorage.setItem('age_ack_ts', timestamp);
-
-    // Send acknowledgment to backend
+  const accept = async () => {
+    localStorage.setItem("age_ack", "1");
+    localStorage.setItem("age_ack_ts", String(Date.now()));
+    
     try {
       await fetch(`${env.API_BASE}/bff/compliance/age/ack`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          timestamp: parseInt(timestamp),
-          userAgent: navigator.userAgent,
-        }),
+        method: "POST",
+        credentials: "include"
       });
-    } catch (error) {
-      console.warn('Failed to send age acknowledgment:', error);
+    } catch {
+      // Silent failure - localStorage persistence maintained
     }
-
-    setIsOpen(false);
+    
+    setOpen(false);
   };
 
-  const handleLeave = () => {
-    window.location.href = 'https://google.com';
-  };
+  // Debug logging for render
+  console.log('🔞 AgeGate Render Check:', {
+    enabled: ageGate.isEnabled(),
+    open: open,
+    willRender: ageGate.isEnabled() && open
+  });
 
-  if (!env.ADULT_CONTENT || !isOpen) {
-    return null;
-  }
+  if (!ageGate.isEnabled() || !open) return null;
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-      role="dialog"
+      className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center p-4" 
+      role="dialog" 
       aria-modal="true"
       aria-labelledby="age-gate-title"
+      aria-describedby="age-gate-description"
     >
-      <div className="bg-white dark:bg-neutral-900 rounded-lg p-6 max-w-md w-full">
-        <h2 id="age-gate-title" className="text-xl font-semibold mb-3 text-neutral-900 dark:text-neutral-100">
-          Adults Only
+      <div className="bg-white dark:bg-neutral-900 rounded-xl p-5 max-w-lg w-full shadow-xl border border-neutral-200 dark:border-neutral-800">
+        <h2 id="age-gate-title" className="text-xl font-semibold mb-2">
+          Adults only (18+)
         </h2>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-          You must be 18 years or older to use this site. This website contains 
-          adult content and is intended for mature audiences only. By continuing, 
-          you confirm that you are 18+ years old.
+        <p id="age-gate-description" className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+          You must be 18 years or older to use this site. By continuing, you confirm that you are 18+ and agree to our Terms and Privacy Policy.
         </p>
-        <p className="text-xs text-neutral-500 dark:text-neutral-500 mb-6">
-          By entering, you agree to our{' '}
+        <div className="flex gap-2 justify-end">
           <a 
-            href="/legal/terms" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-brand-500 hover:underline"
+            href="https://google.com" 
+            className="px-3 py-2 rounded bg-neutral-200 dark:bg-neutral-800 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
           >
-            Terms of Service
+            Leave
           </a>
-          {' '}and{' '}
-          <a 
-            href="/legal/privacy" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-brand-500 hover:underline"
-          >
-            Privacy Policy
-          </a>
-          .
-        </p>
-        <div className="flex gap-3 justify-end">
-          <button
-            onClick={handleLeave}
-            className="px-4 py-2 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
-          >
-            Leave Site
-          </button>
-          <button
-            onClick={handleAccept}
-            className="px-4 py-2 rounded bg-brand-500 text-white hover:bg-brand-600 transition-colors"
+          <button 
+            onClick={accept} 
+            className="px-3 py-2 rounded bg-brand-500 text-white hover:bg-brand-600 transition-colors"
           >
             I am 18+
           </button>

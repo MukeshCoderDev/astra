@@ -15,6 +15,8 @@ const Profile = lazy(() => import('../pages/Profile/Profile'));
 const Search = lazy(() => import('../pages/Search/Search'));
 const Legal = lazy(() => import('../pages/Legal/Legal'));
 const ProfileRoute = lazy(() => import('../components/routing/ProfileRoute'));
+const LiveHome = lazy(() => import('../pages/Live/LiveHome'));
+const LiveWatch = lazy(() => import('../pages/Live/LiveWatch'));
 
 // Loading fallback component
 function PageLoadingFallback() {
@@ -53,6 +55,16 @@ function AppRoutes() {
         <Route path="shorts/:videoId" element={
           <LazyRoute>
             <Shorts />
+          </LazyRoute>
+        } />
+        <Route path="live" element={
+          <LazyRoute>
+            <LiveHome />
+          </LazyRoute>
+        } />
+        <Route path="live/:id" element={
+          <LazyRoute>
+            <LiveWatch />
           </LazyRoute>
         } />
         <Route path="watch/:id" element={

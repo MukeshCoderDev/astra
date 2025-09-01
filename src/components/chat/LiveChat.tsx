@@ -1,127 +1,122 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Users } from 'lucide-react';
+import { Send, Users, Clock } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
-import { useSocketContext } from '../../providers/SocketProvider';
-import { useSessionStore } from '../../store/sessionStore';
 import { ScrollArea } from '../ui/scroll-area';
-
-interface ChatMessage {
-  id: string;
-  userId: string;
-  username: string;
-  displayName: string;
-  avatar?: string;
-  message: string;
-  timestamp: string;
-  type: 'message' | 'tip' | 'system';
-  tipAmount?: number;
-}
+import { ChatMessage } from './ChatMessage';
+import { useLiveChat } from '../../hooks/useLiveChat';
+import { useSessionStore } from '../../store/sessionStore';
+import type { Message, ModerationAction } from '../../types/live';
+import { CHAT_CONFIG } from '../../constants/live';
 
 interface LiveChatProps {
-  videoId: string;
+  streamId: string;
   className?: string;
+  isCreator?: boolean;
+  isModerator?: boolean;
 }
 
-export function LiveChat({ videoId, className = '' }: LiveChatProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+export function LiveChat({ 
+  streamId, 
+  className = '', 
+  isCreator = false, 
+  isModerator = false 
+}: LiveChatProps) {
   const [newMessage, setNewMessage] = useState('');
-  const [viewerCount, setViewerCount] = useState(0);
-  const [isConnected, setIsConnected] = useState(false);
+  const [slowModeCooldown, setSlowModeCooldown] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const cooldownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
-  const { emit, on, off, connected } = useSocketContext();
   const { user } = useSessionStore();
+  const { 
+    messages, 
+    viewers, 
+    slowModeSec, 
+    connected, 
+    loading, 
+    failed, 
+    send 
+  } = useLiveChat(streamId);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current && typeof messagesEndRef.current.scrollIntoView === 'function') {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Join chat room when component mounts
+  // Handle slow mode cooldown
   useEffect(() => {
-    if (connected && videoId) {
-      emit('join_chat', { videoId });
-      setIsConnected(true);
-
-      // Set up event listeners
-      const unsubscribeMessage = on('chat_message', (message: ChatMessage) => {
-        setMessages(prev => [...prev, message]);
-      });
-
-      const unsubscribeTip = on('chat_tip', (tipData: ChatMessage) => {
-        setMessages(prev => [...prev, tipData]);
-      });
-
-      const unsubscribeViewerCount = on('viewer_count_update', (data: { count: number }) => {
-        setViewerCount(data.count);
-      });
-
-      const unsubscribeUserJoined = on('user_joined_chat', (data: { username: string }) => {
-        setMessages(prev => [...prev, {
-          id: `system-${Date.now()}`,
-          userId: 'system',
-          username: 'System',
-          displayName: 'System',
-          message: `${data.username} joined the chat`,
-          timestamp: new Date().toISOString(),
-          type: 'system',
-        }]);
-      });
-
-      const unsubscribeUserLeft = on('user_left_chat', (data: { username: string }) => {
-        setMessages(prev => [...prev, {
-          id: `system-${Date.now()}`,
-          userId: 'system',
-          username: 'System',
-          displayName: 'System',
-          message: `${data.username} left the chat`,
-          timestamp: new Date().toISOString(),
-          type: 'system',
-        }]);
-      });
-
-      return () => {
-        emit('leave_chat', { videoId });
-        unsubscribeMessage();
-        unsubscribeTip();
-        unsubscribeViewerCount();
-        unsubscribeUserJoined();
-        unsubscribeUserLeft();
-        setIsConnected(false);
-      };
+    if (slowModeCooldown > 0) {
+      cooldownIntervalRef.current = setInterval(() => {
+        setSlowModeCooldown(prev => {
+          if (prev <= 1) {
+            if (cooldownIntervalRef.current) {
+              clearInterval(cooldownIntervalRef.current);
+              cooldownIntervalRef.current = null;
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     }
-  }, [connected, videoId, emit, on]);
 
-  const sendMessage = () => {
-    if (!newMessage.trim() || !user || !isConnected) return;
-
-    const message = {
-      videoId,
-      message: newMessage.trim(),
-      timestamp: new Date().toISOString(),
+    return () => {
+      if (cooldownIntervalRef.current) {
+        clearInterval(cooldownIntervalRef.current);
+        cooldownIntervalRef.current = null;
+      }
     };
+  }, [slowModeCooldown]);
 
-    emit('send_chat_message', message);
-    setNewMessage('');
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !user || !connected || slowModeCooldown > 0) return;
+
+    try {
+      await send(newMessage.trim());
+      setNewMessage('');
+      
+      // Start slow mode cooldown if enabled
+      if (slowModeSec > 0) {
+        setSlowModeCooldown(slowModeSec);
+      }
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      // TODO: Show error toast
+    }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
   };
 
-  const formatTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString([], { 
+  const formatTime = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleTimeString([], { 
       hour: '2-digit', 
       minute: '2-digit' 
     });
+  };
+
+  const getConnectionStatus = () => {
+    if (loading) return 'Connecting...';
+    if (failed && !connected) return 'Connection failed - using fallback';
+    if (!connected) return 'Disconnected';
+    return 'Connected';
+  };
+
+  const canSendMessage = user && connected && !loading && slowModeCooldown === 0;
+
+  const handleModerationAction = (messageId: string, action: ModerationAction) => {
+    // The WebSocket will handle updating the message state
+    // This callback can be used for UI feedback if needed
+    console.log(`Moderation action ${action} performed on message ${messageId}`);
   };
 
   return (
@@ -129,9 +124,18 @@ export function LiveChat({ videoId, className = '' }: LiveChatProps) {
       {/* Chat header */}
       <div className="flex items-center justify-between p-3 border-b border-gray-700">
         <h3 className="font-semibold">Live Chat</h3>
-        <div className="flex items-center space-x-1 text-sm text-gray-400">
-          <Users className="h-4 w-4" />
-          <span>{viewerCount}</span>
+        <div className="flex items-center space-x-3 text-sm text-gray-400">
+          <div className="flex items-center space-x-1">
+            <Users className="h-4 w-4" />
+            <span>{viewers}</span>
+          </div>
+          <div className={`text-xs px-2 py-1 rounded ${
+            connected ? 'bg-green-600/20 text-green-400' : 
+            failed ? 'bg-red-600/20 text-red-400' : 
+            'bg-yellow-600/20 text-yellow-400'
+          }`}>
+            {getConnectionStatus()}
+          </div>
         </div>
       </div>
 
@@ -139,7 +143,15 @@ export function LiveChat({ videoId, className = '' }: LiveChatProps) {
       <ScrollArea className="flex-1 p-3">
         <div className="space-y-2">
           {messages.map((message) => (
-            <ChatMessageItem key={message.id} message={message} />
+            <ChatMessage 
+              key={message.id} 
+              message={message} 
+              streamId={streamId}
+              isCreator={isCreator}
+              isModerator={isModerator}
+              formatTime={formatTime}
+              onModerationAction={handleModerationAction}
+            />
           ))}
           <div ref={messagesEndRef} />
         </div>
@@ -148,24 +160,46 @@ export function LiveChat({ videoId, className = '' }: LiveChatProps) {
       {/* Message input */}
       {user ? (
         <div className="p-3 border-t border-gray-700">
+          {/* Slow mode indicator */}
+          {slowModeSec > 0 && (
+            <div className="mb-2 text-xs text-gray-400 flex items-center space-x-1">
+              <Clock className="h-3 w-3" />
+              <span>
+                Slow mode: {slowModeSec}s between messages
+                {slowModeCooldown > 0 && ` (${slowModeCooldown}s remaining)`}
+              </span>
+            </div>
+          )}
+          
           <div className="flex space-x-2">
             <Input
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder={isConnected ? "Type a message..." : "Connecting..."}
-              disabled={!isConnected}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                slowModeCooldown > 0 
+                  ? `Wait ${slowModeCooldown}s...` 
+                  : canSendMessage 
+                    ? "Type a message..." 
+                    : getConnectionStatus()
+              }
+              disabled={!canSendMessage}
               className="flex-1 bg-gray-800 border-gray-600 text-white placeholder-gray-400"
-              maxLength={200}
+              maxLength={CHAT_CONFIG.MAX_MESSAGE_LENGTH}
             />
             <Button
               onClick={sendMessage}
-              disabled={!newMessage.trim() || !isConnected}
+              disabled={!newMessage.trim() || !canSendMessage}
               size="sm"
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
             >
               <Send className="h-4 w-4" />
             </Button>
+          </div>
+          
+          {/* Character count */}
+          <div className="mt-1 text-xs text-gray-500 text-right">
+            {newMessage.length}/{CHAT_CONFIG.MAX_MESSAGE_LENGTH}
           </div>
         </div>
       ) : (
@@ -177,66 +211,3 @@ export function LiveChat({ videoId, className = '' }: LiveChatProps) {
   );
 }
 
-interface ChatMessageItemProps {
-  message: ChatMessage;
-}
-
-function ChatMessageItem({ message }: ChatMessageItemProps) {
-  if (message.type === 'system') {
-    return (
-      <div className="text-xs text-gray-500 italic text-center py-1">
-        {message.message}
-      </div>
-    );
-  }
-
-  if (message.type === 'tip') {
-    return (
-      <div className="bg-gradient-to-r from-yellow-600/20 to-orange-600/20 rounded-lg p-2 border border-yellow-600/30">
-        <div className="flex items-center space-x-2">
-          <Avatar className="h-6 w-6">
-            <AvatarImage src={message.avatar} />
-            <AvatarFallback className="text-xs bg-yellow-600">
-              {message.displayName.charAt(0)}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center space-x-2">
-              <span className="font-semibold text-yellow-400 text-sm">
-                {message.displayName}
-              </span>
-              <span className="text-xs text-gray-400">
-                tipped ${message.tipAmount}
-              </span>
-            </div>
-            {message.message && (
-              <p className="text-sm text-gray-300 mt-1">{message.message}</p>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-start space-x-2 group hover:bg-gray-800/50 rounded px-2 py-1">
-      <Avatar className="h-6 w-6 mt-0.5">
-        <AvatarImage src={message.avatar} />
-        <AvatarFallback className="text-xs bg-gray-600">
-          {message.displayName.charAt(0)}
-        </AvatarFallback>
-      </Avatar>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline space-x-2">
-          <span className="font-semibold text-sm text-blue-400">
-            {message.displayName}
-          </span>
-          <span className="text-xs text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
-            {formatTime(message.timestamp)}
-          </span>
-        </div>
-        <p className="text-sm text-gray-300 break-words">{message.message}</p>
-      </div>
-    </div>
-  );
-}

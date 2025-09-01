@@ -1,15 +1,28 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Play, Upload, Wallet, User } from 'lucide-react';
+import { Home, Play, Upload, Wallet, User, Radio } from 'lucide-react';
 import { Button } from '../ui';
 import { clsx } from 'clsx';
+import { ENV } from '../../lib/env';
 
-const navItems = [
-  { icon: Home, label: 'Home', path: '/' },
-  { icon: Play, label: 'Shorts', path: '/shorts' },
-  { icon: Upload, label: 'Upload', path: '/upload' },
-  { icon: Wallet, label: 'Wallet', path: '/wallet' },
-  { icon: User, label: 'Studio', path: '/studio' },
-];
+const getNavItems = () => {
+  const baseItems = [
+    { icon: Home, label: 'Home', path: '/' },
+    { icon: Play, label: 'Shorts', path: '/shorts' },
+  ];
+
+  // Add Live link if live streaming is enabled
+  if (ENV.LIVE_ENABLED) {
+    baseItems.push({ icon: Radio, label: 'Live', path: '/live' });
+  }
+
+  baseItems.push(
+    { icon: Upload, label: 'Upload', path: '/upload' },
+    { icon: Wallet, label: 'Wallet', path: '/wallet' },
+    { icon: User, label: 'Studio', path: '/studio' }
+  );
+
+  return baseItems;
+};
 
 interface SideNavProps {
   className?: string;
@@ -17,6 +30,7 @@ interface SideNavProps {
 
 function SideNav({ className }: SideNavProps) {
   const location = useLocation();
+  const navItems = getNavItems();
 
   return (
     <nav className={clsx("flex flex-col gap-2 p-4", className)}>

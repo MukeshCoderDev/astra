@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, Suspense, lazy } from 'react';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import { Loading } from '../../components/ui';
 import { EarningsSummary } from '../../components/studio/EarningsSummary';
 import { ContentTable } from '../../components/studio/ContentTable';
 import { KYCStatusCard } from '../../components/studio/KYCStatusCard';
@@ -11,6 +13,7 @@ import { PayoutRequestDialog } from '../../components/studio/PayoutRequestDialog
 import { useKYC } from '../../hooks/useKYC';
 import { usePayout } from '../../hooks/usePayout';
 import { useWallet } from '../../hooks/useWallet';
+import { ENV } from '../../lib/env';
 import { 
   BarChart3,
   Video,
@@ -18,9 +21,15 @@ import {
   Upload,
   TrendingUp,
   Users,
-  Eye
+  Eye,
+  Radio
 } from 'lucide-react';
 import { Video as VideoType } from '../../types';
+
+// Lazy load live streaming pages
+const StudioLiveList = lazy(() => import('./StudioLiveList'));
+const NewLive = lazy(() => import('./NewLive'));
+const ControlRoom = lazy(() => import('./ControlRoom'));
 
 // Mock data - in real app this would come from API
 const mockEarningsData = {
@@ -125,9 +134,19 @@ const mockVideos: VideoType[] = [
 
 
 
-function Studio() {
+// Loading fallback component for lazy routes
+function StudioLoadingFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-[50vh]">
+      <Loading />
+    </div>
+  );
+}
+
+function StudioDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const [showPayoutDialog, setShowPayoutDialog] = useState(false);
+  const navigate = useNavigate();
   
   // Hooks for data fetching
   const { kycData, startVerification, uploadDocument, signModelRelease } = useKYC();
@@ -209,6 +228,16 @@ function Studio() {
             <BarChart3 className="h-4 w-4" />
             Analytics
           </Button>
+          {ENV.LIVE_ENABLED && (
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/studio/live')} 
+              className="gap-2"
+            >
+              <Radio className="h-4 w-4" />
+              Live Streams
+            </Button>
+          )}
           <Button className="gap-2">
             <Upload className="h-4 w-4" />
             Upload Video
@@ -271,7 +300,7 @@ function Studio() {
 
       {/* Main Content Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className={`grid w-full ${ENV.LIVE_ENABLED ? 'grid-cols-5' : 'grid-cols-4'}`}>
           <TabsTrigger value="overview" className="gap-2">
             <BarChart3 className="h-4 w-4" />
             Overview
@@ -280,6 +309,12 @@ function Studio() {
             <Video className="h-4 w-4" />
             Content
           </TabsTrigger>
+          {ENV.LIVE_ENABLED && (
+            <TabsTrigger value="live" className="gap-2">
+              <Radio className="h-4 w-4" />
+              Live
+            </TabsTrigger>
+          )}
           <TabsTrigger value="payouts" className="gap-2">
             <DollarSign className="h-4 w-4" />
             Payouts
@@ -317,6 +352,32 @@ function Studio() {
             onAnalytics={handleVideoAnalytics}
           />
         </TabsContent>
+
+        {ENV.LIVE_ENABLED && (
+          <TabsContent value="live" className="space-y-6">
+            <Card className="p-6">
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Radio className="h-8 w-8 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-lg font-medium mb-2">Live Streaming</h3>
+                <p className="text-muted-foreground mb-6">
+                  Create and manage your live streams from the dedicated live studio
+                </p>
+                <div className="flex items-center justify-center gap-3">
+                  <Button onClick={() => navigate('/studio/live')} className="gap-2">
+                    <Radio className="h-4 w-4" />
+                    Go to Live Studio
+                  </Button>
+                  <Button variant="outline" onClick={() => navigate('/studio/live/new')} className="gap-2">
+                    <Upload className="h-4 w-4" />
+                    Create Stream
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </TabsContent>
+        )}
 
         <TabsContent value="payouts" className="space-y-6">
           {settings && balance && (
@@ -360,6 +421,32 @@ function Studio() {
         />
       )}
     </div>
+  );
+}
+
+// Main Studio component with routing
+function Studio() {
+  const location = useLocation();
+  
+  // Check if we're on a live streaming sub-route
+  const isLiveRoute = location.pathname.startsWith('/studio/live');
+  
+  // If live streaming is disabled, always show dashboard
+  if (!ENV.LIVE_ENABLED || !isLiveRoute) {
+    return <StudioDashboard />;
+  }
+  
+  // Handle live streaming routes
+  return (
+    <Suspense fallback={<StudioLoadingFallback />}>
+      <Routes>
+        <Route path="live" element={<StudioLiveList />} />
+        <Route path="live/new" element={<NewLive />} />
+        <Route path="live/:id" element={<ControlRoom />} />
+        {/* Fallback to dashboard for unknown routes */}
+        <Route path="*" element={<StudioDashboard />} />
+      </Routes>
+    </Suspense>
   );
 }
 

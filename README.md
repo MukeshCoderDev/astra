@@ -67,12 +67,13 @@ A modern React.js 18 + TypeScript frontend for a walletless Web3 content platfor
 
 ## Environment Variables
 
-See `.env.example` for all available environment variables.
+See `.env.example` for all available environment variables and `docs/ENVIRONMENT_VARIABLES.md` for comprehensive documentation.
 
 Key variables:
 - `REACT_APP_API_BASE` - Backend API URL
 - `REACT_APP_WS_URL` - WebSocket server URL
-- `REACT_APP_ADULT` - Enable adult content features (1/0)
+- `REACT_APP_ADULT` - Enable adult content age verification (1/0)
+- `REACT_APP_AGE_GATE_TTL_DAYS` - Age verification consent duration (days)
 - `REACT_APP_FEATURE_FLAGS` - Comma-separated feature flags
 
 ## Project Structure

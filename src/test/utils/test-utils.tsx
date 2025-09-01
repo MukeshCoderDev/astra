@@ -4,8 +4,6 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '../../providers/ThemeProvider';
 import { ToastProvider } from '../../providers/ToastProvider';
-import { AuthProvider } from '../../providers/AuthProvider';
-import { WalletProvider } from '../../providers/WalletProvider';
 
 // Create a custom render function that includes providers
 const AllTheProviders = ({ children }: { children: React.ReactNode }) => {
@@ -19,19 +17,13 @@ const AllTheProviders = ({ children }: { children: React.ReactNode }) => {
   });
 
   return (
-    <BrowserRouter>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <AuthProvider>
-            <WalletProvider>
-              <ToastProvider>
-                {children}
-              </ToastProvider>
-            </WalletProvider>
-          </AuthProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <ToastProvider>
+          {children}
+        </ToastProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 };
 
@@ -42,6 +34,20 @@ const customRender = (
 
 export * from '@testing-library/react';
 export { customRender as render };
+
+// Helper for rendering with router
+export const renderWithRouter = (
+  ui: ReactElement,
+  { initialEntries = ['/'], ...options }: { initialEntries?: string[] } & Omit<RenderOptions, 'wrapper'> = {}
+) => {
+  const Wrapper = ({ children }: { children: React.ReactNode }) => (
+    <BrowserRouter>
+      <AllTheProviders>{children}</AllTheProviders>
+    </BrowserRouter>
+  );
+  
+  return render(ui, { wrapper: Wrapper, ...options });
+};
 
 // Mock file for testing file uploads
 export const createMockFile = (

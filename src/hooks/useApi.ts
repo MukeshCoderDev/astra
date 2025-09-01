@@ -2,6 +2,44 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, handleAPIError } from '../lib/api';
 import { useToast } from '../providers/ToastProvider';
 
+// Simple API hook for direct HTTP calls
+export function useApi() {
+  return {
+    get: async (endpoint: string) => {
+      try {
+        const response = await apiClient.get(endpoint);
+        return { ok: true, data: response };
+      } catch (error) {
+        return { ok: false, error: handleAPIError(error) };
+      }
+    },
+    post: async (endpoint: string, data?: any) => {
+      try {
+        const response = await apiClient.post(endpoint, data);
+        return { ok: true, data: response };
+      } catch (error) {
+        return { ok: false, error: handleAPIError(error) };
+      }
+    },
+    put: async (endpoint: string, data?: any) => {
+      try {
+        const response = await apiClient.put(endpoint, data);
+        return { ok: true, data: response };
+      } catch (error) {
+        return { ok: false, error: handleAPIError(error) };
+      }
+    },
+    delete: async (endpoint: string) => {
+      try {
+        const response = await apiClient.delete(endpoint);
+        return { ok: true, data: response };
+      } catch (error) {
+        return { ok: false, error: handleAPIError(error) };
+      }
+    },
+  };
+}
+
 // Generic API hook for GET requests
 export function useApiQuery<T>(
   queryKey: string[],

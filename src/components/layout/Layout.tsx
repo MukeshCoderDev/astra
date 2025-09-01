@@ -3,8 +3,9 @@ import { useState, useEffect } from 'react';
 import Header from '../nav/Header';
 import SideNav from '../nav/SideNav';
 import BottomNav from '../nav/BottomNav';
-import AgeGate from '../compliance/AgeGate';
+import AgeRequirementCard from '../compliance/AgeRequirementCard';
 import { GlobalNotifications } from '../notifications/GlobalNotifications';
+import { AgeGateTest } from '../debug/AgeGateTest';
 import { Footer } from './Footer';
 import { useUIStore } from '../../store/uiStore';
 import { clsx } from 'clsx';
@@ -18,31 +19,56 @@ function Layout() {
     setMobileMenuOpen(!mobileMenuOpen);
   };
 
-  // Auto-immersive on watch and shorts detail
+  // Auto-immersive on watch, live, and shorts detail
   useEffect(() => {
     const pathname = location.pathname || '';
-    const routeImmersive = pathname.startsWith('/watch') || /^\/shorts\//.test(pathname);
-    // Route can force immersive ON, but user can toggle it off after
-    if (routeImmersive) setImmersive(true);
+    const routeImmersive = pathname.startsWith('/watch') || pathname.startsWith('/live/') || /^\/shorts\//.test(pathname);
+    
+    if (routeImmersive) {
+      // Route can force immersive ON
+      setImmersive(true);
+    } else {
+      // Reset immersive mode when leaving watch/live/shorts routes
+      setImmersive(false);
+    }
   }, [location.pathname, setImmersive]);
 
   // Peek the sidebar when mouse hits far-left edge in immersive mode
   useEffect(() => {
     if (!immersive) return;
+    
     const aside = document.querySelector('aside') as HTMLElement | null;
     if (!aside) return;
+    
     const onMove = (e: MouseEvent) => {
       const peek = e.clientX <= 12;
       aside.style.transform = peek ? 'translateX(0)' : 'translateX(-100%)';
     };
+    
     window.addEventListener('mousemove', onMove);
-    return () => window.removeEventListener('mousemove', onMove);
+    
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+    };
+  }, [immersive]);
+
+  // Clean up transforms when leaving immersive mode
+  useEffect(() => {
+    if (!immersive) {
+      const aside = document.querySelector('aside') as HTMLElement | null;
+      if (aside) {
+        aside.style.transform = '';
+      }
+    }
   }, [immersive]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Age Gate Modal */}
-      <AgeGate />
+      <AgeRequirementCard />
+      
+      {/* Debug Component - Remove in production */}
+      <AgeGateTest />
       
       {/* Global Notifications */}
       <GlobalNotifications />
